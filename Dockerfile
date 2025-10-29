@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y python3-pip && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy your code files into the container (add them to your project dir first)
-COPY web_scraping.py summarize.py storage.py agent.py retrieve.py manual_papers.json gui.py ./
+COPY start_project.sh web_scraping.py summarize.py storage.py agent.py retrieve.py manual_papers.json gui.py ./
 
 # Expose Ollama API port if needed (default 11434)
 EXPOSE 11434
