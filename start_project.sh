@@ -28,10 +28,6 @@ fi
 echo "Initializing LLM..."
 python3 shared_llm.py
 
-# Run agent.py to fetch and summarize (add --no-fetch if you don't want auto-pull)
-echo "Running agent.py..."
-python3 agent.py  # Or add args like --no-fetch
-
 # Launch Streamlit GUI
 echo "Starting GUI..."
 streamlit run gui.py

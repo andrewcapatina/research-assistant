@@ -1,7 +1,6 @@
 import streamlit as st
 import sqlite3
 import pandas as pd
-from datetime import datetime, timedelta
 import ollama  # For optional synthesis
 from io import StringIO
 from sentence_transformers import SentenceTransformer
@@ -9,19 +8,7 @@ import faiss
 import numpy as np
 
 import planner_agent
-
-# DB connection
-def get_summaries(weeks_back=1, keyword=None):
-    conn = sqlite3.connect("/app/data/papers.db")
-    start_date = (datetime.now() - timedelta(weeks=weeks_back)).isoformat()
-    query = "SELECT date, paper_json, summary FROM summaries WHERE (date >= ? OR date IS NULL)"
-    params = [start_date]
-    if keyword:
-        query += " AND (summary LIKE ? OR paper_json LIKE ?)"
-        params.extend([f"%{keyword}%", f"%{keyword}%"])
-    df = pd.read_sql_query(query, conn, params=params)
-    conn.close()
-    return df
+from storage import get_summaries
 
 # Build FAISS index for semantic search (from all summaries in DB)
 @st.cache_resource  # Cache for performance
@@ -100,7 +87,7 @@ if st.button("Run Planner") and goal_input:
             st.write(f"**Summary {i}:** {summary}")
     
     with st.expander("Evaluation"):
-        st.write(result.get("evaluation", "No evaluation generated."))
+        st.write(result.get("final_answer", "No evaluation generated."))
 
     # Display table
     st.markdown("### Paper Summaries")
