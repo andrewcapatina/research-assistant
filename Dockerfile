@@ -1,4 +1,4 @@
-# Base from the Ollama image for JetPack 7 on Thor (ARM64, CUDA 13.0)
+# Base ubuntu image the DGX spark uses
 FROM ubuntu:24.04
 
 # Set working directory
