@@ -10,6 +10,6 @@ Steps to run the project:
     -v ~/ollama-data:/root/.ollama -v ~/agent-data:/app/data \
     -p 11434:11434 -p 8501:8501 -w /app ai-agent:spark bash
 
-3. Run the setup script to start the project.
+3. Run the setup script within the container to start the project.
 
     bash start_project.sh
