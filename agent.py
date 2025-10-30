@@ -5,12 +5,13 @@ from web_scraping import fetch_new_papers
 from summarize import summarize_paper
 from storage import init_db, store_summaries
 import json
+import shared_llm
 
 # Init DB
 init_db()
 
 # LCEL setup for orchestration (replaces deprecated LLMChain)
-llm = OllamaLLM(model="llama3.1:8b")
+llm = shared_llm.get_llm()
 prompt_template = PromptTemplate(
     input_variables=["instructions", "title", "abstract"],
     template="{instructions}\n\nTitle: {title}\nAbstract: {abstract}"
@@ -20,7 +21,7 @@ chain = prompt_template | llm
 def run_update(custom_instructions="Summarize focusing on AI innovations:", papers_to_add=None, fetch_auto=True):
     papers = []
     if fetch_auto:
-        papers = fetch_new_papers(days_back=7)  # Auto-fetch from arXiv as before
+        papers = fetch_new_papers(max_results=5, days_back=7)  # Auto-fetch from arXiv as before
     if papers_to_add:
         papers.extend(papers_to_add)  # Append manual ones
     summaries = []
