@@ -49,7 +49,7 @@ RUN apt-get update && apt-get install -y python3-pip && \
 RUN python3 -m pip install --no-cache-dir --break-system-packages torch --index-url https://developer.download.nvidia.com/compute/redist/jp/v61/
 
 # Copy your code files into the container (add them to your project dir first)
-COPY start_project.sh shared_llm.py web_scraping.py summarize.py storage.py agent.py \
+COPY start_project.sh shared_llm.py web_scraping.py summarize.py storage.py \
      retrieve.py manual_papers.json gui.py memory.py planner_agent.py ./
 
 # Expose Ollama API port if needed (default 11434)
