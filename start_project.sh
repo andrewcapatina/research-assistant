@@ -5,6 +5,7 @@
 
 # Configurable variables
 MODEL="llama3.1:8b"  # Change to your preferred model, e.g., "llama3.1:8b-q4_0" for quantized
+# MODEL="llama3.1:70b"
 DB_PATH="/app/data/papers.db"  # Ensure matches your code
 
 # Start Ollama server in background if not running

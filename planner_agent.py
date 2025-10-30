@@ -11,8 +11,9 @@ from sentence_transformers import SentenceTransformer
 import faiss
 import pandas as pd
 import numpy as np
+import shared_llm
 
-llm = OllamaLLM(model="llama3.1:8b")
+llm = shared_llm.get_llm()
 
 class AgentState(TypedDict):
     goal: str

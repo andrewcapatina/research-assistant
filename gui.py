@@ -6,6 +6,7 @@ from io import StringIO
 from sentence_transformers import SentenceTransformer
 import faiss
 import numpy as np
+import shared_llm
 
 import planner_agent
 from storage import get_summaries
@@ -42,11 +43,8 @@ if not df.empty:
         combined = "\n\n".join(summaries)
         synth_prompt = f"Compile these distinct paper summaries into a unique, non-repetitive report. Structure as: 1. Overview of key themes. 2. Bullet points of major innovations per paper (no duplicates). 3. Implications for AI/comp arch. Be concise, avoid filler:\n\n{combined[:3000]}"
         with st.spinner("Synthesizing..."):
-            response = ollama.generate(
-                model="llama3.1:8b",
-                prompt=synth_prompt,
-                options={"temperature": 0.4, "top_p": 0.8, "repeat_penalty": 1.3}
-            )
+            llm = shared_llm.get_llm()
+            response = llm.invoke(synth_prompt)
         st.markdown("### Synthesized Report")
         st.write(response['response'].strip())
 
