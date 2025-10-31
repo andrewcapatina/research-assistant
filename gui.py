@@ -1,7 +1,6 @@
 import streamlit as st
 import sqlite3
 import pandas as pd
-import ollama  # For optional synthesis
 from io import StringIO
 from sentence_transformers import SentenceTransformer
 import faiss
@@ -9,12 +8,19 @@ import numpy as np
 import shared_llm
 
 import planner_agent
-from storage import get_summaries
+import storage
+
+if "planner_reload_flag" not in st.session_state:
+    st.session_state.planner_reload_flag = False
+if "planner_results" not in st.session_state:
+    st.session_state.planner_results = False    
+planner_reload_flag = st.session_state.planner_reload_flag
+planner_results = st.session_state.planner_results
 
 # Build FAISS index for semantic search (from all summaries in DB)
 @st.cache_resource  # Cache for performance
 def build_faiss_index():
-    conn = sqlite3.connect("/app/data/papers.db")
+    conn = sqlite3.connect(storage.DB_PATH)
     df_all = pd.read_sql_query("SELECT id, summary FROM summaries", conn)
     conn.close()
     
@@ -34,7 +40,7 @@ st.title("Research Paper Summaries Dashboard")
 weeks = st.slider("Look back weeks:", 1, 4, 1)
 keyword = st.text_input("Keyword search (in title/abstract/summary):")
 
-df = get_summaries(weeks_back=weeks, keyword=keyword)
+df = storage.get_summaries(weeks_back=weeks, keyword=keyword)
 
 if not df.empty:
     # Optional: Synthesize if checkbox selected
@@ -46,7 +52,7 @@ if not df.empty:
             llm = shared_llm.get_llm()
             response = llm.invoke(synth_prompt)
         st.markdown("### Synthesized Report")
-        st.write(response['response'].strip())
+        st.write(response)
 
 # New: Semantic Search Section for Memory/Reasoning
 st.markdown("### Semantic Search (Query Past Summaries)")
@@ -70,23 +76,38 @@ if st.button("Search Memory") and semantic_query:
 st.markdown("### Agentic Planner: Set a Goal")
 goal_input = st.text_input("Enter a goal (e.g., 'Analyze recent AI hardware papers'):")
 if st.button("Run Planner") and goal_input:
+    planner_results = None
     with st.spinner("Planning and executing..."):
-        result = planner_agent.run_planner(goal_input)
+        planner_results = planner_agent.run_planner(goal_input)
+        st.session_state.planner_results = planner_results
+        planner_reload_flag = True
+        st.session_state.planner_reload_flag = planner_reload_flag
+        st.rerun()
+
+if planner_reload_flag is True:
     st.markdown("### Planner Results")
-    
     # Display structured output
     with st.expander("Generated Plan"):
-        st.write(result.get("plan", "No plan generated."))
-    
-    summaries = result.get("summaries", [])
+        st.write(planner_results.get("plan", "No plan generated."))
+
+    summaries = planner_results.get("summaries", [])
     if summaries:
         st.markdown("### Summaries")
         for i, summary in enumerate(summaries, 1):
             st.write(f"**Summary {i}:** {summary}")
-    
-    with st.expander("Evaluation"):
-        st.write(result.get("final_answer", "No evaluation generated."))
 
+    with st.expander("Evaluation"):
+        st.write(planner_results.get("final_answer", "No evaluation generated."))
+ 
+    st.session_state.planner_reload_flag = planner_reload_flag
+
+st.markdown("### Database Management")
+if st.button("Clear Database"):
+    storage.clear_db()
+    planner_reload_flag = False
+    st.rerun()
+
+if not df.empty:
     # Display table
     st.markdown("### Paper Summaries")
     for _, row in df.iterrows():

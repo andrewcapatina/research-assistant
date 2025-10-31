@@ -61,3 +61,9 @@ def store_summaries(papers, summaries, db_path=DB_PATH):
                      (date_str, json.dumps(paper_copy), summary))
     conn.commit()
     conn.close()
+
+def clear_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("DELETE FROM summaries")
+    conn.commit()
+    conn.close()

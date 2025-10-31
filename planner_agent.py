@@ -73,11 +73,13 @@ def fetch_step(state):
 
 # Node 5: Summarize New
 def summarize_step(state):
-    if state["new_papers"]:
-        summaries = [summarize_paper(p) for p in state["new_papers"]]
-        store_summaries(state["new_papers"], summaries)
-        return {"new_summaries": summaries}
-    return {"new_summaries": []}
+    summaries = []
+    for paper in state["new_papers"]:
+        summary = summarize_paper(paper)  # Your existing individual summarizer
+        summaries.append(summary)
+        # Store individually (pass lists of 1 for compatibility with store_summaries)
+        store_summaries([paper], [summary])
+    return {"new_summaries": summaries}  
 
 # Node 6: Final Answer
 def final_step(state):
