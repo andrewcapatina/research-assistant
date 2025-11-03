@@ -1,31 +1,29 @@
 # shared_llm.py
 from vllm import LLM, SamplingParams
 from vllm.transformers_utils.tokenizer import get_tokenizer
+import asyncio
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, pipeline, GenerationConfig
+
+import benchmarking
 
 _llm = None
 _tokenizer = None
 def get_hf_llm():
     global _llm, _tokenizer
     if _llm is None:
-        local_model_path = "/app/models/llama-3.1-8b-awq-instruct"
-
-        # 2. Optional: 4-bit quantization (saves VRAM, faster on DGX)
-        quantization_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.float16,
-            bnb_4bit_use_double_quant=True,
-        )
-
-        
+        local_model_path = "/app/models/Meta-Llama-3.1-8B-Instruct-AWQ-INT4"
+      
         _llm = LLM(
-            model=local_model_path,  # ← AWQ path
+            model=local_model_path,
             quantization="awq",
             tensor_parallel_size=1,  # Adjust for multi-GPU
-            dtype=torch.float16,  # vLLM detects 4-bit
-            gpu_memory_utilization=0.9,
+            max_model_len=2048,
+            block_size=16,
+            enable_prefix_caching=True,
+            dtype=torch.float16,
+            max_num_batched_tokens=2048,  # ← FORCE BATCHING
+            max_num_seqs=16,              # ← Max concurrent sequences
         )
 
         _tokenizer = get_tokenizer(local_model_path)
@@ -57,7 +55,7 @@ def cleanup_and_exit(signum=None, frame=None):
     print("GPU memory released. Exiting.")
     sys.exit(0)
 
-def generate(prompt: str, system: str = "You are a helpful assistant.", **kwargs) -> str:
+def generate_plan(prompt: str, system: str = "You are a helpful assistant.", **kwargs) -> str:
     """
     Generate using Llama 3.1 format (works for base model).
     """
@@ -93,7 +91,7 @@ def generate(prompt: str, system: str = "You are a helpful assistant.", **kwargs
     outputs = outputs.outputs[0].text
     return outputs
 
-def summarize(prompt: str, system: str = "You are a helpful assistant.", **kwargs) -> str:
+def summarize(papers: str, system: str = "You are a helpful assistant.", **kwargs) -> str:
     """
     summarize using Llama 3.1 format (works for instruct model).
     """
@@ -106,11 +104,6 @@ def summarize(prompt: str, system: str = "You are a helpful assistant.", **kwarg
     else:
         max_tokens = 150
 
-    messages = [
-        {"role": "system", "content": system,},
-        {"role": "user", "content": prompt},
-    ]
- 
     sampling = SamplingParams(
         max_tokens=max_tokens,
         temperature=temperature,
@@ -118,13 +111,61 @@ def summarize(prompt: str, system: str = "You are a helpful assistant.", **kwarg
         repetition_penalty=1.8,
     )
 
-    formatted = _tokenizer.apply_chat_template(
-        messages,
+    input_tokens = []
+    print("prompts")
+    for paper in papers:
+        message = [
+            {"role": "system", "content": system,},
+            {"role": "user", "content": paper},
+        ]
+        input_tokens.append(_tokenizer.apply_chat_template(
+            message,
+            tokenize=False,  # Return string, not IDs
+            add_generation_prompt=True,  # Add assistant header
+        ))
+        print(message[1])
+
+    #generated_ids = _llm.generate(**tokenized_chat, **gen_kwargs)
+    outputs = benchmarking.benchmark_summarization_inference(_llm, input_tokens, sampling)
+    print("LLM_OUTPUT")
+    summaries = []
+    for i, out in enumerate(outputs):
+        summary = out.outputs[0].text.strip()
+        summaries.append(summary)
+        print(f"  Paper {i+1}: {summary[:100]}...")
+    
+    print(f"Generated {len(summaries)} summaries")
+    return summaries
+
+def analyze(prompt: str, system: str = "You are a helpful assistant.", **kwargs) -> str:
+    """
+    summarize using Llama 3.1 format (works for instruct model).
+    """
+    if 'temperature' in kwargs:
+        temperature = kwargs['temperature']
+    else:
+        temperature = 0.8
+    if 'max_tokens' in kwargs:
+        max_tokens = kwargs['max_tokens']
+    else:
+        max_tokens = 150
+
+    sampling = SamplingParams(
+        max_tokens=max_tokens,
+        temperature=temperature,
+        top_p=0.95,
+        repetition_penalty=1.8,
+    )
+    message = [
+        {"role": "system", "content": system,},
+        {"role": "user", "content": prompt},
+    ]
+    formatted =_tokenizer.apply_chat_template(
+        message,
         tokenize=False,  # Return string, not IDs
         add_generation_prompt=True,  # Add assistant header
     )
 
     #generated_ids = _llm.generate(**tokenized_chat, **gen_kwargs)
-    # outputs = _tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
-    outputs = _llm.generate([formatted], sampling)[0]
+    outputs = _llm.generate(formatted, sampling)[0]
     return outputs.outputs[0].text

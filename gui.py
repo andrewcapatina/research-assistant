@@ -57,7 +57,7 @@ if not df.empty:
 
 # New: Semantic Search Section for Memory/Reasoning
 st.markdown("### Semantic Search (Query Past Summaries)")
-semantic_query = st.text_input("Semantic query (e.g., 'AI hardware innovations'):")
+semantic_query = st.text_input("Semantic query (e.g., 'cache coherence innovations'):")
 if st.button("Search Memory") and semantic_query:
     index, df_all = build_faiss_index()
     if index is None:
@@ -75,7 +75,7 @@ if st.button("Search Memory") and semantic_query:
 
 # New: Goal-Oriented Planner Section
 st.markdown("### Agentic Planner: Set a Goal")
-goal_input = st.text_input("Enter a goal (e.g., 'Analyze recent AI hardware papers'):")
+goal_input = st.text_input("Enter a goal (e.g., 'Analyze recent cache coherence papers'):")
 if st.button("Run Planner") and goal_input:
     planner_results = None
     with st.spinner("Planning and executing..."):

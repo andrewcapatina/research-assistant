@@ -26,10 +26,10 @@ class AgentState(TypedDict):
 # Node 1: Plan
 def plan_step(state):
     prompt = state['goal']
-    system_prompt = "Your goal is to transform a high-level research objective into """ + \
+    system_prompt = """Your goal is to transform a high-level research objective into """ + \
         """one (and only one) precise, searchable queries with keywords ONLY that are optimized for academic databases like arXiv. """ + \
         """Include 2-3 key technical terms. No numbering, no explanation."""
-    plan = shared_llm.generate(prompt, system=system_prompt, temperature=0.001, max_new_tokens=150)
+    plan = shared_llm.generate_plan(prompt, system=system_prompt, temperature=0.001, max_new_tokens=150)
     print(plan)
     return {"plan": plan}
 
@@ -58,7 +58,7 @@ def should_fetch(state):
         f"Goal: {state["goal"]}\n" + \
         "Existing knowledge: {existing}\n" + \
         "Is this sufficient? Answer YES or NO."
-    response = shared_llm.generate(check_prompt)
+    response = shared_llm.generate_plan(check_prompt)
     return {"should_fetch": "NO" in response.upper()}
 
 # Node 4: Fetch New Papers
@@ -70,13 +70,10 @@ def fetch_step(state):
 
 # Node 5: Summarize New
 def summarize_step(state):
-    summaries = [""]
     system = "Your task is to read the title and abstract of a research paper and produce a **single paragraph**" + \
         "(3-5 sentences) that captures key findings (what was discovered or achieved), most important technical details" + \
         "(method, architecture, metrics, or innovation), no fluff, no background, no future work."
-    for paper in state["new_papers"]:
-        summary = benchmark_summarization_inference(paper, system)
-        summaries.append(summary)
+    summaries = shared_llm.summarize(state["new_papers"], system, temperature=0.9, max_new_tokens=1000) # Run the summarization
     store_summaries(state["new_papers"], summaries)
     return {"new_summaries": summaries}
 
@@ -88,7 +85,7 @@ def final_step(state):
             """Synthesize a final answer."""
     system_prompt = "Analyze and identify 3 key emerging technologies." + \
                     "For each technology, highlight the advancement and challenge/impact."
-    answer = shared_llm.summarize(user_prompt, system_prompt, max_tokens=150, temperature=0.5)
+    answer = shared_llm.analyze(user_prompt, system_prompt, max_tokens=150, temperature=0.5)
     return {"final_answer": answer}
 
 # Build Graph
