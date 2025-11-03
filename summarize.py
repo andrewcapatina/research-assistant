@@ -1,18 +1,33 @@
-# summarize.py (enhanced with CoT)
-from langchain_ollama import OllamaLLM
-from langchain_core.prompts import PromptTemplate
+# ==== summarize.py (fixed) ====
 import shared_llm
+import re
 
-def summarize_paper(paper, custom_instructions="Summarize focusing on AI innovations:"):
-    llm = shared_llm.get_llm()
-    cot_prompt = PromptTemplate(
-        input_variables=["instructions", "title", "abstract"],
-        template="""Step 1: Read the title and abstract carefully.
-Step 2: Identify key findings and innovations.
-Step 3: Relate to AI/comp arch implications.
-Step 4: Output a concise summary.
-{instructions}\n\nTitle: {title}\nAbstract: {abstract}"""
+def _clean_summary(raw: str) -> str:
+    """Strip CoT, prompt, and keep only the final answer."""
+    # Remove everything up to the first blank line after the abstract
+    parts = re.split(r"\n\s*\n", raw, 1)
+    candidate = parts[-1] if len(parts) > 1 else raw
+
+    # Keep only the first 2-3 sentences
+    sentences = re.split(r"(?<=[.!?])\s+", candidate)
+    return " ".join(sentences[:3]).strip()
+
+def summarize_paper(paper, custom_instructions="Summarize focusing on electrical and computer engineering innovations:"):
+    llm = shared_llm.get_hf_llm()
+
+    # 1. Minimal prompt – no CoT steps
+    prompt = PromptTemplate.from_template(
+        "Title: {title}\n"
+        "Abstract: {abstract}\n\n"
+        "{instructions}\n"
+        "Provide a concise 2-3 sentence summary. Do not repeat any input."
     )
-    chain = cot_prompt | llm
-    response = chain.invoke({"instructions": custom_instructions, "title": paper['title'], "abstract": paper['abstract']})
-    return response.strip()
+
+    chain = prompt | llm
+    raw = chain.invoke({
+        "title": paper["title"],
+        "abstract": paper["abstract"],
+        "instructions": custom_instructions,
+    })
+    print(raw)
+    return _clean_summary(raw)

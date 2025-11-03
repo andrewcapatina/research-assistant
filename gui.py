@@ -5,8 +5,8 @@ from io import StringIO
 from sentence_transformers import SentenceTransformer
 import faiss
 import numpy as np
-import shared_llm
 
+import shared_llm
 import planner_agent
 import storage
 
@@ -21,7 +21,8 @@ planner_results = st.session_state.planner_results
 @st.cache_resource  # Cache for performance
 def build_faiss_index():
     conn = sqlite3.connect(storage.DB_PATH)
-    df_all = pd.read_sql_query("SELECT id, summary FROM summaries", conn)
+    df_all = pd.read_sql_query("SELECT id, paper_json, summary FROM summaries", conn)
+
     conn.close()
     
     if df_all.empty:
@@ -49,7 +50,7 @@ if not df.empty:
         combined = "\n\n".join(summaries)
         synth_prompt = f"Compile these distinct paper summaries into a unique, non-repetitive report. Structure as: 1. Overview of key themes. 2. Bullet points of major innovations per paper (no duplicates). 3. Implications for AI/comp arch. Be concise, avoid filler:\n\n{combined[:3000]}"
         with st.spinner("Synthesizing..."):
-            llm = shared_llm.get_llm()
+            llm = shared_llm.get_hf_llm()
             response = llm.invoke(synth_prompt)
         st.markdown("### Synthesized Report")
         st.write(response)

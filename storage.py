@@ -16,7 +16,7 @@ def init_db(db_path=DB_PATH):
 
 # DB connection
 def get_summaries(weeks_back=1, keyword=None):
-    conn = sqlite3.connect("/app/data/papers.db")
+    conn = sqlite3.connect(DB_PATH)
     start_date = (datetime.now() - timedelta(weeks=weeks_back)).isoformat()
     query = "SELECT date, paper_json, summary FROM summaries WHERE (date >= ? OR date IS NULL)"
     params = [start_date]

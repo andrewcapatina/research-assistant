@@ -1,19 +1,19 @@
 # planner_agent.py
-from langgraph.graph import StateGraph, END
 from typing import TypedDict, List
-from langchain_ollama import OllamaLLM
-from langchain_core.prompts import PromptTemplate
 from web_scraping import fetch_new_papers
-from summarize import summarize_paper
 from storage import store_summaries
 import sqlite3
 from sentence_transformers import SentenceTransformer
 import faiss
 import pandas as pd
 import numpy as np
+from langgraph.graph import StateGraph, END
+
+from benchmarking import benchmark_summarization_inference
 import shared_llm
 
-llm = shared_llm.get_llm()
+# llm = shared_llm.get_llm()
+llm = shared_llm.get_hf_llm()
 
 class AgentState(TypedDict):
     goal: str
@@ -25,14 +25,12 @@ class AgentState(TypedDict):
 
 # Node 1: Plan
 def plan_step(state):
-    plan_prompt = PromptTemplate.from_template(
-        "Goal: {goal}\n"
-        "Step 1: Search existing knowledge for relevance.\n"
-        "Step 2: If insufficient, fetch new papers from arXiv.\n"
-        "Step 3: Summarize and synthesize.\n"
-        "Output a concise plan."
-    )
-    plan = llm.invoke(plan_prompt.format(goal=state["goal"]))
+    prompt = state['goal']
+    system_prompt = "Your goal is to transform a high-level research objective into """ + \
+        """one (and only one) precise, searchable queries with keywords ONLY that are optimized for academic databases like arXiv. """ + \
+        """Include 2-3 key technical terms. No numbering, no explanation."""
+    plan = shared_llm.generate(prompt, system=system_prompt, temperature=0.001, max_new_tokens=150)
+    print(plan)
     return {"plan": plan}
 
 # Node 2: Search Memory (FAISS + DB)
@@ -56,44 +54,41 @@ def search_memory(state):
 
 # Node 3: Decide to Fetch?
 def should_fetch(state):
-    check_prompt = PromptTemplate.from_template(
-        "Goal: {goal}\n"
-        "Existing knowledge: {existing}\n"
+    check_prompt = \
+        f"Goal: {state["goal"]}\n" + \
+        "Existing knowledge: {existing}\n" + \
         "Is this sufficient? Answer YES or NO."
-    )
-    response = llm.invoke(check_prompt.format(goal=state["goal"], existing="\n".join(state["existing_summaries"])))
+    response = shared_llm.generate(check_prompt)
     return {"should_fetch": "NO" in response.upper()}
 
 # Node 4: Fetch New Papers
 def fetch_step(state):
     if state.get("should_fetch", True):
-        papers = fetch_new_papers(days_back=7, max_results=3)
+        papers = fetch_new_papers(query=state['plan'], days_back=7, max_results=7)
         return {"new_papers": papers}
     return {"new_papers": []}
 
 # Node 5: Summarize New
 def summarize_step(state):
-    summaries = []
+    summaries = [""]
+    system = "Your task is to read the title and abstract of a research paper and produce a **single paragraph**" + \
+        "(3-5 sentences) that captures key findings (what was discovered or achieved), most important technical details" + \
+        "(method, architecture, metrics, or innovation), no fluff, no background, no future work."
     for paper in state["new_papers"]:
-        summary = summarize_paper(paper)  # Your existing individual summarizer
+        summary = benchmark_summarization_inference(paper, system)
         summaries.append(summary)
-        # Store individually (pass lists of 1 for compatibility with store_summaries)
-        store_summaries([paper], [summary])
-    return {"new_summaries": summaries}  
+    store_summaries(state["new_papers"], summaries)
+    return {"new_summaries": summaries}
 
 # Node 6: Final Answer
 def final_step(state):
-    synth_prompt = PromptTemplate.from_template(
-        "Goal: {goal}\n"
-        "From memory: {memory}\n"
-        "New findings: {new}\n"
-        "Synthesize a final answer."
-    )
-    answer = llm.invoke(synth_prompt.format(
-        goal=state["goal"],
-        memory="\n".join(state["existing_summaries"]),
-        new="\n".join(state["new_summaries"])
-    ))
+    user_prompt = f"""Goal: {state["goal"]}""" + \
+            f"""From memory: {state["existing_summaries"]}""" + \
+            f"""New findings: {state["new_summaries"]}""" + \
+            """Synthesize a final answer."""
+    system_prompt = "Analyze and identify 3 key emerging technologies." + \
+                    "For each technology, highlight the advancement and challenge/impact."
+    answer = shared_llm.summarize(user_prompt, system_prompt, max_tokens=150, temperature=0.5)
     return {"final_answer": answer}
 
 # Build Graph
